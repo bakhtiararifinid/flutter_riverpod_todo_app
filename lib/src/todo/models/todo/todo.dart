@@ -8,10 +8,17 @@ class Todo with _$Todo {
   const Todo._();
 
   const factory Todo({
-    int? id,
-    String? title,
-    @Default(false) bool isCompleted,
+    @JsonKey(name: '_id') String? id,
+    @JsonKey(name: 'description') String? title,
+    @Default(false) bool completed,
   }) = _Todo;
 
   factory Todo.fromJson(Map<String, dynamic> json) => _$TodoFromJson(json);
+
+  Map<String, dynamic> toJsonForm() {
+    final json = toJson();
+    json.remove('_id');
+
+    return json;
+  }
 }

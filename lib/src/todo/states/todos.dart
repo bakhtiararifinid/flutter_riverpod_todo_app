@@ -6,8 +6,8 @@ class TodosNotifier extends StateNotifier<AsyncValue<List<Todo>>> {
   TodosNotifier() : super(const AsyncValue.data([]));
 
   void setState(List<Todo> todos) => state = AsyncValue.data(todos);
-  void setAsLoading() => state = const AsyncValue.loading();
-  void setAsError(Object error) => state = AsyncValue.error(error);
+  void setLoading() => state = const AsyncValue.loading();
+  void setError(Object error) => state = AsyncValue.error(error);
 }
 
 final todosProvider =

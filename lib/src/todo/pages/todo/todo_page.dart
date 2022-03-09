@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../common/widgets/loading_icon_button.dart';
+import '../../../common/widgets/show_snackbar.dart';
+import '../../../core/exceptions/api_exception.dart';
+import '../../models/todo/todo.dart';
 import '../../services/todo_service.dart';
 import '../../states/todo.dart';
 import '../entry_todo/entry_todo_page.dart';
@@ -17,92 +21,81 @@ class TodoPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Todo'),
-        actions: todoAsyncValue.value != null
-            ? _buildAppBarActions(context, ref)
-            : null,
+        actions: const [
+          _DeleteTodoButton(),
+        ],
       ),
       body: todoAsyncValue.when(
-        data: (todo) {
-          return Column(
-            children: [
-              _Field(
-                label: 'Title',
-                value: todo?.title ?? '',
-              ),
-              _Field(
-                label: 'Completed',
-                value: todo?.isCompleted == true ? 'Yes' : 'No',
-              ),
-            ],
-          );
-        },
-        error: (error, _) => Center(child: Text(error.toString())),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        data: _buildData,
+        error: _buildError,
+        loading: _buildLoading,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _gotoEntryTodoPage(context),
+        onPressed: () => _gotoEntryTodoPage(context, ref),
         child: const Icon(Icons.edit),
       ),
     );
   }
 
-  void _gotoEntryTodoPage(BuildContext context) {
-    Navigator.of(context).pushNamed(EntryTodoPage.routeName);
+  Widget _buildData(Todo? todo) {
+    return ListView(
+      children: [
+        ListTile(
+          title: const Text('Title'),
+          subtitle: Text(todo?.title ?? ''),
+        ),
+        ListTile(
+          title: const Text('Completed'),
+          subtitle: Text(todo?.completed == true ? 'Yes' : 'No'),
+        ),
+      ],
+    );
   }
 
-  List<Widget> _buildAppBarActions(BuildContext context, WidgetRef ref) {
-    return [
-      IconButton(
-        onPressed: () => _toggleIsComplete(ref),
-        icon: const Icon(Icons.check),
-      ),
-      IconButton(
-        onPressed: () => _delete(context, ref),
-        icon: const Icon(Icons.delete),
-      ),
-    ];
-  }
+  Widget? _buildError(error, _) => Center(child: Text(error.toString()));
 
-  void _toggleIsComplete(WidgetRef ref) {
+  Widget? _buildLoading() => const Center(child: CircularProgressIndicator());
+
+  void _gotoEntryTodoPage(BuildContext context, WidgetRef ref) {
     final todo = ref.read(todoProvider).value;
-    if (todo != null && todo.id != null) {
-      ref.read(todoServiceProvider).toggleIsCompleted(todo.id!);
-    }
-  }
-
-  void _delete(BuildContext context, WidgetRef ref) async {
-    final todo = ref.read(todoProvider).value;
-    if (todo != null && todo.id != null) {
-      await ref.read(todoServiceProvider).delete(todo.id!);
-      Navigator.of(context).pop();
-    }
+    Navigator.of(context).pushNamed(EntryTodoPage.routeName, arguments: todo!);
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({
-    Key? key,
-    required this.label,
-    required this.value,
-  }) : super(key: key);
+class _DeleteTodoButton extends ConsumerStatefulWidget {
+  const _DeleteTodoButton({Key? key}) : super(key: key);
 
-  final String label;
-  final String value;
+  @override
+  ConsumerState<_DeleteTodoButton> createState() => _DeleteTodoButtonState();
+}
+
+class _DeleteTodoButtonState extends ConsumerState<_DeleteTodoButton> {
+  bool _loading = false;
 
   @override
   Widget build(BuildContext context) {
-    final valueStyle = Theme.of(context).textTheme.subtitle1;
-    final labelStyle = valueStyle?.copyWith(fontWeight: FontWeight.bold);
+    if (_loading) return const LoadingIconButton();
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: labelStyle),
-          Text(value, style: valueStyle),
-        ],
-      ),
+    return IconButton(
+      onPressed: () => _delete(),
+      icon: const Icon(Icons.delete),
     );
   }
+
+  void _delete() async {
+    _startLoading();
+    try {
+      final todo = ref.read(todoProvider).value;
+      await ref.read(todoServiceProvider).delete(todo!.id!);
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      showErrorSnackbar(context, e.message);
+    } finally {
+      _finishLoading();
+    }
+  }
+
+  void _startLoading() => setState(() => _loading = true);
+
+  void _finishLoading() => setState(() => _loading = false);
 }

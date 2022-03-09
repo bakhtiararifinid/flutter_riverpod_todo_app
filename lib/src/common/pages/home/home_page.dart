@@ -3,10 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../todo/models/todo/todo.dart';
 import '../../../todo/pages/entry_todo/entry_todo_page.dart';
-import '../../../todo/pages/todo/todo_page.dart';
 import '../../../todo/services/todo_service.dart';
-import '../../../todo/states/todo.dart';
-import '../../../todo/states/todos.dart';
+import 'account_tab.dart';
+import 'home_tab.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -18,50 +17,54 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
+  int _currentTab = 0;
+
   @override
   void initState() {
     super.initState();
-    ref.read(todoServiceProvider).getAll();
+    WidgetsBinding.instance!.addPostFrameCallback((_) {
+      ref.read(todoServiceProvider).getAll();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final todosAsyncValue = ref.watch(todosProvider);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter Riverpod Todo App'),
+        title: const Text('Todo App'),
       ),
-      body: todosAsyncValue.when(
-        data: (todos) {
-          return ListView.builder(
-            itemCount: todos.length,
-            itemBuilder: (context, i) {
-              return ListTile(
-                title: Text(todos[i].title ?? ''),
-                trailing: todos[i].isCompleted ? const Icon(Icons.check) : null,
-                onTap: () => _gotoTodoPage(todos[i]),
-              );
-            },
-          );
-        },
-        error: (error, _) => Center(child: Text(error.toString())),
-        loading: () => const Center(child: CircularProgressIndicator()),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _gotoEntryTodoPage,
-        child: const Icon(Icons.add),
+      body: _currentTab == 0 ? const HomeTab() : const AccountTab(),
+      floatingActionButton: _buildFloatingActionButton(),
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Account',
+          ),
+        ],
+        currentIndex: _currentTab,
+        onTap: (index) => setState(() => _currentTab = index),
       ),
     );
   }
 
-  void _gotoEntryTodoPage() {
-    ref.read(todoProvider.notifier).setState(const Todo());
-    Navigator.of(context).pushNamed(EntryTodoPage.routeName);
+  Widget? _buildFloatingActionButton() {
+    if (_currentTab != 0) return null;
+
+    return FloatingActionButton(
+      onPressed: _gotoEntryTodoPage,
+      child: const Icon(Icons.add),
+    );
   }
 
-  void _gotoTodoPage(Todo todo) {
-    ref.read(todoProvider.notifier).setState(todo);
-    Navigator.of(context).pushNamed(TodoPage.routeName);
+  void _gotoEntryTodoPage() {
+    Navigator.of(context).pushNamed(
+      EntryTodoPage.routeName,
+      arguments: const Todo(),
+    );
   }
 }

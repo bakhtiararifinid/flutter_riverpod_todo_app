@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/exceptions/api_exception.dart';
 import '../models/todo/todo.dart';
 import '../repositories/todo_repository.dart';
 import '../states/todo.dart';
@@ -7,76 +8,65 @@ import '../states/todos.dart';
 
 class TodoService {
   final Reader read;
-  final TodoRepository todoRepository;
 
-  TodoService(this.read, this.todoRepository);
+  TodoService(this.read);
 
   Future<List<Todo>> getAll() async {
-    final todos = await todoRepository.getAll();
-    read(todosProvider.notifier).setState(todos);
+    read(todosProvider.notifier).setLoading();
+    try {
+      final todos = await read(todoRepositoryProvider).getAll();
+      read(todosProvider.notifier).setState(todos);
 
-    return todos;
+      return todos;
+    } on ApiException catch (e) {
+      read(todosProvider.notifier).setError(e);
+      return [];
+    }
   }
 
-  Future<Todo> getById(int id) async {
-    final todo = await todoRepository.getById(id);
-    read(todoProvider.notifier).setState(todo);
+  Future<Todo?> getById(String id) async {
+    read(todoProvider.notifier).setLoading();
+    try {
+      final todo = await read(todoRepositoryProvider).getById(id);
+      read(todoProvider.notifier).setState(todo);
 
-    return todo;
+      return todo;
+    } on ApiException catch (e) {
+      read(todoProvider.notifier).setError(e);
+      return null;
+    }
   }
 
-  Future<Todo> add(String title) async {
-    final param = Todo(title: title);
-    final todo = await todoRepository.add(param);
+  Future<Todo> save(Todo param) async {
+    Todo todo;
+    if (param.id == null) {
+      todo = await read(todoRepositoryProvider).add(param);
+    } else {
+      todo = await read(todoRepositoryProvider).update(param);
+    }
+
+    final todos = await read(todoRepositoryProvider).getAll();
+
     read(todoProvider.notifier).setState(todo);
-
-    final todos = await todoRepository.getAll();
-    read(todosProvider.notifier).setState(todos);
-
-    return todo;
-  }
-
-  Future<Todo> update(int id, String title) async {
-    Todo param = await todoRepository.getById(id);
-    param = param.copyWith(title: title);
-
-    final todo = await todoRepository.update(param);
-    read(todoProvider.notifier).setState(todo);
-
-    final todos = await todoRepository.getAll();
-    read(todosProvider.notifier).setState(todos);
-
-    return todo;
-  }
-
-  Future<Todo> toggleIsCompleted(int id) async {
-    Todo param = await todoRepository.getById(id);
-    param = param.copyWith(isCompleted: !param.isCompleted);
-
-    final todo = await todoRepository.update(param);
-    read(todoProvider.notifier).setState(todo);
-
-    final todos = await todoRepository.getAll();
     read(todosProvider.notifier).setState(todos);
 
     return todo;
   }
 
-  Future<Todo> delete(int id) async {
-    final param = await todoRepository.getById(id);
-    final todo = await todoRepository.delete(param);
-    read(todoProvider.notifier).setState(todo);
+  Future<void> delete(String id) async {
+    final param = await read(todoRepositoryProvider).getById(id);
+    if (param == null) throw ApiException('Todo not found');
 
-    final todos = await todoRepository.getAll();
+    await read(todoRepositoryProvider).delete(param);
+    final todos = await read(todoRepositoryProvider).getAll();
+
+    read(todoProvider.notifier).setState(null);
     read(todosProvider.notifier).setState(todos);
-
-    return todo;
   }
 }
 
 final todoServiceProvider = Provider<TodoService>((ref) {
   return TodoService(
     ref.read,
-    ref.watch(todoRepositoryProvider),
   );
 });

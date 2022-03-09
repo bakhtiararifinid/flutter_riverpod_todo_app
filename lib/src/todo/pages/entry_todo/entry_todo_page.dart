@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../common/widgets/checkbox_form_field.dart';
+import '../../../common/widgets/loading_button.dart';
+import '../../../common/widgets/show_snackbar.dart';
+import '../../../core/exceptions/api_exception.dart';
 import '../../models/todo/todo.dart';
 import '../../services/todo_service.dart';
-import '../../states/todo.dart';
 
 class EntryTodoPage extends ConsumerStatefulWidget {
-  const EntryTodoPage({
-    Key? key,
-  }) : super(key: key);
+  const EntryTodoPage(this.todo, {Key? key}) : super(key: key);
 
   static const routeName = '/entry_todo';
+  final Todo todo;
 
   @override
   ConsumerState<EntryTodoPage> createState() => _EntryTodoPageState();
@@ -19,46 +21,59 @@ class EntryTodoPage extends ConsumerStatefulWidget {
 class _EntryTodoPageState extends ConsumerState<EntryTodoPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  late final Todo? _todo;
+  bool? _completed = false;
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _todo = ref.read(todoProvider).value;
-    if (_todo != null) {
-      _titleController.text = _todo!.title ?? '';
-    }
+    _titleController.text = widget.todo.title ?? '';
+    _completed = widget.todo.completed;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_todo?.id == null ? 'Add Todo' : 'Update Todo'),
+        title: Text(widget.todo.id == null ? 'Add Todo' : 'Update Todo'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
+      body: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextFormField(
                 decoration: const InputDecoration(label: Text('Title')),
                 controller: _titleController,
                 validator: _validateTitle,
               ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  child: const Text('Simpan'),
-                ),
-              ),
-              const SizedBox(height: 32),
-            ],
-          ),
+            ),
+            CheckboxFormField(
+              title: const Text('Completed'),
+              onChanged: (value) => setState(() => _completed = value),
+              initialValue: _completed == true,
+            ),
+            const Spacer(),
+            _buildSubmitButton(),
+            const SizedBox(height: 32),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: double.infinity,
+        child: _loading
+            ? const LoadingButton()
+            : ElevatedButton(
+                onPressed: _submit,
+                child: const Text('Save'),
+              ),
       ),
     );
   }
@@ -66,14 +81,22 @@ class _EntryTodoPageState extends ConsumerState<EntryTodoPage> {
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final todoService = ref.read(todoServiceProvider);
-    if (_todo?.id == null) {
-      await todoService.add(_titleController.text);
-    } else {
-      await todoService.update(_todo!.id!, _titleController.text);
-    }
+    _startLoading();
+    try {
+      final todoService = ref.read(todoServiceProvider);
+      final param = widget.todo.copyWith(
+        title: _titleController.text,
+        completed: _completed == true,
+      );
 
-    Navigator.of(context).pop();
+      await todoService.save(param);
+
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      showErrorSnackbar(context, e.message);
+    } finally {
+      _finishLoading();
+    }
   }
 
   String? _validateTitle(value) {
@@ -82,4 +105,8 @@ class _EntryTodoPageState extends ConsumerState<EntryTodoPage> {
     }
     return null;
   }
+
+  void _startLoading() => setState(() => _loading = true);
+
+  void _finishLoading() => setState(() => _loading = false);
 }

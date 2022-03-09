@@ -1,40 +1,48 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/services/api_service.dart';
 import '../models/todo/todo.dart';
 
 class TodoRepository {
-  int lastId = 4;
-  List<Todo> todos = [
-    const Todo(id: 1, title: 'Exersice', isCompleted: false),
-    const Todo(id: 2, title: 'Meditate', isCompleted: false),
-    const Todo(id: 3, title: 'Read a book', isCompleted: false),
-  ];
+  final ApiService apiService;
+
+  TodoRepository(this.apiService);
 
   Future<List<Todo>> getAll() async {
-    return todos;
+    final json = await apiService.get('/task') as Map;
+    return (json['data'] as List).map((e) => Todo.fromJson(e)).toList();
   }
 
-  Future<Todo> getById(int id) async {
-    return todos.where((e) => e.id == id).first;
+  Future<Todo?> getById(String id) async {
+    final json = await apiService.get('/task/$id') as Map;
+    return Todo.fromJson(json['data']);
   }
 
-  Future<Todo> add(Todo todo) async {
-    todos.add(todo.copyWith(id: lastId));
-    lastId++;
-    return todo;
+  Future<Todo> add(Todo param) async {
+    final json = await apiService.post(
+      '/task',
+      body: param.toJsonForm(),
+    ) as Map;
+
+    return Todo.fromJson(json['data']);
   }
 
-  Future<Todo> update(Todo todo) async {
-    todos = todos.map((e) => e.id == todo.id ? todo : e).toList();
-    return todo;
+  Future<Todo> update(Todo param) async {
+    final json = await apiService.put(
+      '/task/${param.id}',
+      body: param.toJsonForm(),
+    ) as Map;
+
+    return Todo.fromJson(json['data']);
   }
 
-  Future<Todo> delete(Todo todo) async {
-    todos = todos.where((e) => e.id != todo.id).toList();
-    return todo;
+  Future<void> delete(Todo param) async {
+    await apiService.delete('/task/${param.id}');
   }
 }
 
 final todoRepositoryProvider = Provider<TodoRepository>((ref) {
-  return TodoRepository();
+  return TodoRepository(
+    ref.watch(apiServiceProvider),
+  );
 });
